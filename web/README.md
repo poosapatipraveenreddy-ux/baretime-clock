@@ -34,14 +34,14 @@ Forgetting step 2 means installed copies keep the old files, so always bump it.
 | `index.html`, `styles.css`, `app.js` | The app |
 | `sw.js` | Offline caching + update mechanism |
 | `manifest.webmanifest`, `icons/` | Makes it installable |
-| `THEME-SPEC.md` | Portable theme format (for a future Android widget) |
+| `THEME-SPEC.md` | Portable theme format (read by both the web designer and Android widget) |
 
 ## Good to know
 - **Fonts** come from Google Fonts the first time you're online, then are cached for offline use. If the very first visit is offline, system fonts are used instead. To make fonts 100% self-contained, download the font files and host them in a `fonts/` folder (add them to `ASSETS` in `sw.js`).
 - **Settings are per browser.** Phone and laptop don't sync automatically; move a design with the share link or export file.
 - **Seconds** tick every second only while the page is open; the minutes-only mode uses almost no battery.
 - iPhone/iPad don't support the full-screen button or keep-screen-on in every version; installing to the Home Screen gives the best result.
-- A website can't draw a clock on the Android *home screen* itself. That needs the native widget (see `THEME-SPEC.md`), which can read the same themes.
+- A website can't draw a clock on the Android *home screen* itself — that is handled by the included native BareTime Android app and widget (in `android/`), which renders the same designs directly on your home screen.
 - "BareTime" is a working name — check it for conflicts before launching publicly.
 
 ## Try it on your computer

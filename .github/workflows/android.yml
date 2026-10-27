@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -22,12 +22,13 @@ jobs:
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then V="${GITHUB_REF_NAME#v}"; else V="0.0.${GITHUB_RUN_NUMBER}"; fi
           echo "name=$V" >> "$GITHUB_OUTPUT"
 
-      - name: Bundle font files (cached)
-        uses: actions/cache@v4
-        with:
-          path: android/app/src/main/assets/fonts
-          key: fonts-${{ hashFiles('tools/fetch_fonts.py') }}
-      - run: python3 tools/fetch_fonts.py
+      - name: Verify bundled fonts
+        run: |
+          if [ ! -f "android/app/src/main/assets/fonts/index.json" ]; then
+            python3 tools/fetch_fonts.py
+          else
+            echo "Using committed fonts in android/app/src/main/assets/fonts/"
+          fi
 
       - name: Hash the website files (offline copy inside the APK)
         run: python3 tools/make_site_json.py web
