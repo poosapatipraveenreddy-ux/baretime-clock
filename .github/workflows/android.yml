@@ -1,0 +1,73 @@
+name: Build Android APK
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write   # lets a tag build attach the APK to a GitHub Release
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Version
+        id: ver
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then V="${GITHUB_REF_NAME#v}"; else V="0.0.${GITHUB_RUN_NUMBER}"; fi
+          echo "name=$V" >> "$GITHUB_OUTPUT"
+
+      - name: Bundle font files (cached)
+        uses: actions/cache@v4
+        with:
+          path: android/app/src/main/assets/fonts
+          key: fonts-${{ hashFiles('tools/fetch_fonts.py') }}
+      - run: python3 tools/fetch_fonts.py
+
+      - name: Hash the website files (offline copy inside the APK)
+        run: python3 tools/make_site_json.py web
+
+      - name: Restore signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/baretime.jks"
+            echo "KEYSTORE_FILE=$RUNNER_TEMP/baretime.jks" >> "$GITHUB_ENV"
+          else
+            echo "::warning::No KEYSTORE_B64 secret: APK is signed with a temporary debug key and cannot be updated over a later build."
+          fi
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build
+        working-directory: android
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: >
+          gradle :app:assembleRelease --no-daemon
+          -PversionName=${{ steps.ver.outputs.name }}
+          -PversionCode=${{ github.run_number }}
+          -PsiteUrl=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+          -PgithubRepo=${{ github.repository }}
+
+      - run: cp android/app/build/outputs/apk/release/app-release.apk BareTime.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BareTime-apk
+          path: BareTime.apk
+
+      - name: Attach to release (tag builds)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: BareTime.apk
