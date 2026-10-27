@@ -6,7 +6,7 @@ import android.text.format.DateFormat
 import org.json.JSONObject
 
 /** A clock design. Same keys and ranges as THEME-SPEC.md; unknown or invalid values fall back to defaults. */
-class Design(o: JSONObject, hour12Default: Boolean) {
+class Design(private val o: JSONObject, hour12Default: Boolean) {
     private fun str(k: String, d: String, ok: Set<String>? = null): String {
         val v = o.opt(k) as? String ?: return d
         return if (ok == null || v in ok) v else d

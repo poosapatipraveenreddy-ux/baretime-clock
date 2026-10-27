@@ -44,10 +44,10 @@ object WebUpdater {
 
     fun checkInBackground(ctx: Context) {
         val app = ctx.applicationContext
-        Thread { try { run(app) } catch (e: Exception) { /* offline or bad upload: keep what we have */ } }.start()
+        Thread { try { checkNow(app) } catch (e: Exception) { /* offline or bad upload: keep what we have */ } }.start()
     }
 
-    private fun run(ctx: Context) {
+    private fun checkNow(ctx: Context) {
         val site = BuildConfig.SITE_URL
         if (site.isBlank()) return
         val base = if (site.endsWith("/")) site else "$site/"
@@ -83,16 +83,17 @@ object WebUpdater {
 
     private fun fetch(url: URL, maxBytes: Int): ByteArray {
         val c = url.openConnection() as HttpURLConnection
-        c.connectTimeout = 10_000; c.readTimeout = 15_000
+        c.connectTimeout = 10_000
+        c.readTimeout = 15_000
         c.setRequestProperty("Cache-Control", "no-cache")
         try {
             if (c.responseCode != 200) throw IllegalStateException("HTTP ${c.responseCode}")
-            c.inputStream.use { ins ->
-                val bytes = ins.readBytes()
-                if (bytes.size > maxBytes) throw IllegalStateException("too large")
-                return bytes
-            }
-        } finally { c.disconnect() }
+            val bytes = c.inputStream.use { it.readBytes() }
+            if (bytes.size > maxBytes) throw IllegalStateException("too large")
+            return bytes
+        } finally {
+            c.disconnect()
+        }
     }
 
     private fun sha256(b: ByteArray) = MessageDigest.getInstance("SHA-256").digest(b).joinToString("") { "%02x".format(it) }

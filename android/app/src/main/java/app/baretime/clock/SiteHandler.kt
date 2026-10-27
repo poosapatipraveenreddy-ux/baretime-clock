@@ -12,8 +12,8 @@ import java.io.InputStream
 
 /**
  * Serves the designer to the WebView from local storage only:
- *   /web/*    newest downloaded copy (filesDir), else the copy bundled in the APK
- *   /fonts/*  fonts bundled in the APK
+ *   web/      newest downloaded copy (filesDir), else the copy bundled in the APK
+ *   fonts/    fonts bundled in the APK
  * and answers Google Fonts CSS requests from the bundled fonts, so nothing needs the network.
  */
 class SiteHandler(private val ctx: Context) {
@@ -66,7 +66,9 @@ class SiteHandler(private val ctx: Context) {
                     if (f.variable) {
                         if (!seen.add(f.file)) continue
                         val ws = faces.filter { it.file == f.file }.map { it.weight }
-                        sb.append("@font-face{font-family:'$name';font-style:normal;font-weight:${ws.min()} ${ws.max()};")
+                        val minW = ws.minOrNull() ?: f.weight
+                        val maxW = ws.maxOrNull() ?: f.weight
+                        sb.append("@font-face{font-family:'$name';font-style:normal;font-weight:$minW $maxW;")
                     } else {
                         sb.append("@font-face{font-family:'$name';font-style:normal;font-weight:${f.weight};")
                     }
