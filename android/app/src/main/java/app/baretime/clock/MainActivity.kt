@@ -7,6 +7,7 @@ import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import android.webkit.JavascriptInterface
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
@@ -131,6 +132,18 @@ class MainActivity : Activity() {
             val mgr = AppWidgetManager.getInstance(this@MainActivity)
             if (!mgr.isRequestPinAppWidgetSupported) return false
             runOnUiThread { mgr.requestPinAppWidget(ComponentName(this@MainActivity, ClockWidgetProvider::class.java), null, null) }
+            return true
+        }
+
+        /** Opens Android's screen saver settings so the user can pick "BareTime clock". */
+        @JavascriptInterface
+        fun openScreenSaverSettings(): Boolean {
+            runOnUiThread {
+                try { startActivity(Intent(Settings.ACTION_DREAM_SETTINGS)) }
+                catch (e: Exception) {
+                    try { startActivity(Intent(Settings.ACTION_DISPLAY_SETTINGS)) } catch (e2: Exception) { /* none */ }
+                }
+            }
             return true
         }
 

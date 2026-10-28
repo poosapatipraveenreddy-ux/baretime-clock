@@ -3,7 +3,7 @@
  * "Apply to widget" buttons and makes share links point at the real website.
  * MIN_BRIDGE: the oldest app "bridge level" this site version works with.
  * Raise it only when this file starts using a new app feature. */
-const MIN_BRIDGE = 1;
+const MIN_BRIDGE = 2;
 (() => {
   const A = window.BareTimeAndroid;
   if (!A) return;
@@ -48,6 +48,11 @@ const MIN_BRIDGE = 1;
     a.onclick = apply;
     b.onclick = () => { try { if (!A.pinWidget()) say('Long-press your home screen, then Widgets → BareTime.'); } catch (e) { /* ignore */ } };
     bar.append(a, b);
+    if (typeof A.openScreenSaverSettings === 'function') {
+      const c = document.createElement('button'); c.type = 'button'; c.textContent = 'Screen saver';
+      c.onclick = () => { try { A.openScreenSaverSettings(); say('Choose "BareTime clock", then tap Start now.'); } catch (e) { /* ignore */ } };
+      bar.append(c);
+    }
     panel.insertBefore(bar, nav);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount();

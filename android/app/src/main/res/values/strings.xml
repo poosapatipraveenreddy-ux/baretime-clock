@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name">BareTime</string>
     <string name="widget_desc">A clock you design in the BareTime app.</string>
+    <string name="dream_label">BareTime clock</string>
 </resources>

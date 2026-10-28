@@ -18,7 +18,7 @@ android {
         buildConfigField("String", "SITE_URL", "\"${prop("siteUrl", "")}\"")
         buildConfigField("String", "GITHUB_REPO", "\"${prop("githubRepo", "")}\"")
         // Raise when the app gains a feature that newer website files depend on.
-        buildConfigField("int", "BRIDGE_LEVEL", "1")
+        buildConfigField("int", "BRIDGE_LEVEL", "2")
     }
 
     // One fixed key lives in GitHub Secrets. Without it the build is signed with a
