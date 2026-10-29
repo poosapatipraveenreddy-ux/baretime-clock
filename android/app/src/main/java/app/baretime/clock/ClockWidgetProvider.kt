@@ -55,10 +55,18 @@ class ClockWidgetProvider : AppWidgetProvider() {
                 val bmp = ClockRenderer.render(ctx, design, w, h)
                 val views = RemoteViews(ctx.packageName, R.layout.widget_clock)
                 views.setImageViewBitmap(R.id.clock_img, bmp)
-                val open = PendingIntent.getActivity(
-                    ctx, 0, Intent(ctx, MainActivity::class.java),
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-                views.setOnClickPendingIntent(R.id.widget_root, open)
+                val tapIntent: Intent? = when (DesignStore.tapMode(ctx)) {
+                    "app" -> Intent(ctx, MainActivity::class.java)
+                    "clock" -> Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS)
+                    else -> null
+                }
+                if (tapIntent != null) {
+                    tapIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    val pi = PendingIntent.getActivity(
+                        ctx, 0, tapIntent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+                    views.setOnClickPendingIntent(R.id.widget_root, pi)
+                }
                 mgr.updateAppWidget(id, views)
             } catch (e: Exception) {
                 // never let a drawing problem crash the launcher's widget host

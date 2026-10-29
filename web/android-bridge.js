@@ -3,7 +3,7 @@
  * "Apply to widget" buttons and makes share links point at the real website.
  * MIN_BRIDGE: the oldest app "bridge level" this site version works with.
  * Raise it only when this file starts using a new app feature. */
-const MIN_BRIDGE = 2;
+const MIN_BRIDGE = 3;
 (() => {
   const A = window.BareTimeAndroid;
   if (!A) return;
@@ -14,6 +14,7 @@ const MIN_BRIDGE = 2;
     .wbar{display:flex;gap:8px;padding:10px 16px 12px;border-bottom:1px solid var(--line)}
     .wbar button{flex:1;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--field);
       font-weight:600;cursor:pointer}
+    .wbar select{flex:1;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--field);color:inherit;padding:0 8px;font-weight:600}
     .wbar button.main{background:linear-gradient(135deg,var(--accent),var(--accent-2));border-color:transparent}
     #btnFs,#btnInstall,#appInstall{display:none!important}`;
   document.head.append(css);
@@ -54,6 +55,16 @@ const MIN_BRIDGE = 2;
       bar.append(c);
     }
     panel.insertBefore(bar, nav);
+    if (typeof A.setTapAction === 'function') {
+      const row = document.createElement('div'); row.className = 'wbar';
+      const sel = document.createElement('select');
+      [['none', 'Tap widget: do nothing (locked)'], ['clock', 'Tap widget: open Clock app'], ['app', 'Tap widget: open BareTime']]
+        .forEach(([v, t]) => { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.append(o); });
+      try { sel.value = A.getTapAction(); } catch (e) { /* ignore */ }
+      sel.onchange = () => { try { A.setTapAction(sel.value); say('Saved.'); } catch (e) { /* ignore */ } };
+      row.append(sel);
+      panel.insertBefore(row, nav);
+    }
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount();
 })();

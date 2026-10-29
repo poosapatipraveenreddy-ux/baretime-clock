@@ -147,6 +147,15 @@ class MainActivity : Activity() {
             return true
         }
 
+        @JavascriptInterface
+        fun setTapAction(mode: String) {
+            DesignStore.setTapMode(this@MainActivity, mode)
+            ClockWidgetProvider.refreshAll(this@MainActivity)
+        }
+
+        @JavascriptInterface
+        fun getTapAction(): String = DesignStore.tapMode(this@MainActivity)
+
         /** Public website address, used for share links. */
         @JavascriptInterface
         fun siteUrl(): String = BuildConfig.SITE_URL

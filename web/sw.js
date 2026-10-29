@@ -2,7 +2,7 @@
  * To ship an update: change VERSION below and redeploy the files.
  * Installed copies notice the change, download the new files in the
  * background and show an "Update now" message. No server code involved. */
-const VERSION = '1.2.0';
+const VERSION = '1.3.0';
 const CORE = 'baretime-core-' + VERSION;
 const RUNTIME = 'baretime-runtime-v1'; // Google Fonts, kept across updates
 const ASSETS = [
