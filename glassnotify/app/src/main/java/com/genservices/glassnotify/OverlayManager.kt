@@ -4,6 +4,7 @@ import android.animation.ValueAnimator
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.Outline
 import android.graphics.PixelFormat
@@ -61,6 +62,8 @@ object OverlayManager {
     private lateinit var copyChip: TextView
     private var accent = 0
     private var currentOtp: String? = null
+    private lateinit var chipRow: LinearLayout
+    private var currentChips: List<Chip> = emptyList()
 
     fun canDraw(c: Context) = Settings.canDrawOverlays(c)
 
@@ -191,6 +194,14 @@ object OverlayManager {
         col.addView(copyChip, chipLp)
         copyChip.setOnClickListener { copyOtp(it.context) }
 
+        // row for link / phone / address / summarize chips
+        chipRow = LinearLayout(c)
+        chipRow.orientation = LinearLayout.HORIZONTAL
+        chipRow.visibility = View.GONE
+        val rowLp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        rowLp.topMargin = dp(c, 6f)
+        col.addView(chipRow, rowLp)
+
         for (t in arrayOf(appName, title, body)) t.setShadowLayer(3f, 0f, 1f, Color.argb(120, 0, 0, 0))
 
         r.setOnTouchListener(touch)
@@ -242,6 +253,9 @@ object OverlayManager {
         } else {
             copyChip.visibility = View.GONE
         }
+        body.maxLines = 2            // a summary may have raised this; reset for every new message
+        currentChips = card.chips
+        renderChips()
     }
 
     private fun buildParams(c: Context): WindowManager.LayoutParams {
@@ -313,6 +327,65 @@ object OverlayManager {
             }
             return false
         }
+    }
+
+    private fun chipView(c: Context, label: String): TextView {
+        val t = TextView(c)
+        t.text = if (label.length > 20) label.substring(0, 19) + "…" else label
+        t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+        t.setTypeface(t.typeface, Typeface.BOLD)
+        t.setTextColor(Color.WHITE)
+        t.maxLines = 1
+        t.setPadding(dp(c, 12f), dp(c, 6f), dp(c, 12f), dp(c, 6f))
+        val bg = GradientDrawable()
+        bg.cornerRadius = dp(c, 14f).toFloat()
+        bg.setColor(Color.argb(90, 255, 255, 255))
+        t.background = bg
+        return t
+    }
+
+    private fun renderChips() {
+        val c = root?.context ?: return
+        chipRow.removeAllViews()
+        if (currentChips.isEmpty() || Prefs.pill(c)) { chipRow.visibility = View.GONE; return }
+        for (chip in currentChips) {
+            val v = chipView(c, chip.label)
+            v.setOnClickListener { onChip(chip, it.context) }
+            val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            lp.marginEnd = dp(c, 6f)
+            chipRow.addView(v, lp)
+        }
+        chipRow.visibility = View.VISIBLE
+    }
+
+    private fun onChip(chip: Chip, c: Context) {
+        val act = chip.action
+        if (act != null) { act(); return }            // e.g. Summarize: stay on screen
+        val i = chip.intent ?: return
+        try {
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            c.startActivity(i)
+            dismiss()
+        } catch (e: Exception) {
+            Toast.makeText(c, "Can't open this", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /** Adds one more chip (for example the address) to the card, if that chat's card is still on screen. */
+    fun addChip(key: String, chip: Chip) {
+        if (!attached || key != currentKey || currentChips.size >= 3) return
+        currentChips = currentChips + chip
+        renderChips()
+    }
+
+    /** Replaces the message text (for example with an AI summary) and keeps the card up a bit longer. */
+    fun showBody(key: String, text: String, holdSeconds: Int) {
+        if (!attached || key != currentKey) return
+        body.maxLines = 8
+        body.text = text
+        body.visibility = View.VISIBLE
+        handler.removeCallbacks(autoHide)
+        handler.postDelayed(autoHide, holdSeconds * 1000L)
     }
 
     private fun copyOtp(c: Context) {

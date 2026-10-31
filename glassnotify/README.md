@@ -23,5 +23,5 @@ Full list and order are in `AGENT-BRIEF.md`.
 
 ## Honest notes
 - Not compiled or tested on a real phone yet — the first build may need a small fix.
-- The app has **no internet permission**, so it cannot send your notifications anywhere.
+- Internet permission is present ONLY for optional AI summaries when you tap "Summarize" (no data is sent automatically).
 - Play Store needs extra review for this kind of app (overlay + notification access). Installing the APK yourself is fine.

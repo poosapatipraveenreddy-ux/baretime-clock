@@ -91,6 +91,24 @@ class MainActivity : Activity() {
         fields.add(key to e)
     }
 
+    /** Like `field`, but the text is hidden with dots (for the API key). */
+    private fun secret(col: LinearLayout, caption: String, key: String) {
+        col.addView(label(caption, 13f))
+        val e = EditText(this)
+        e.setTextColor(Color.WHITE)
+        e.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+        e.setText(Prefs.text(this, key))
+        col.addView(e)
+        fields.add(key to e)
+    }
+
+    private fun saveFields() {
+        Prefs.setBlockedText(this, blocked.text.toString())
+        for ((k, e) in fields) Prefs.setText(this, k, e.text.toString())
+        Rules.reload(this)
+        Ai.reload(this)
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == 77 && resultCode == RESULT_OK) {
@@ -189,6 +207,47 @@ class MainActivity : Activity() {
         col.addView(button("Open history inbox") { startActivity(Intent(this, InboxActivity::class.java)) })
         toggle(col, "Hide the original notification when a card shows", "hideOrig", false)
 
+        col.addView(label("Chips", 16f, true))
+        toggle(col, "Link, phone and address chips", "chips", true)
+
+        col.addView(label("AI summary (optional, uses internet)", 16f, true))
+        col.addView(label("Only when you tap “Summarize” on a chat with 3+ messages, the last messages are sent to the service below. Nothing is sent automatically.", 12f, false, Color.argb(170, 255, 255, 255)))
+        toggle(col, "AI summary", "ai", false)
+        secret(col, "API key (kept only on this phone):", "aiKey")
+
+        val presets = arrayOf(
+            Triple("Google Gemini", "https://generativelanguage.googleapis.com/v1beta/openai", "gemini-1.5-flash"),
+            Triple("OpenRouter", "https://openrouter.ai/api/v1", "google/gemini-flash-1.5"),
+            Triple("Groq", "https://api.groq.com/openai/v1", "llama-3.1-8b-instant"),
+            Triple("NVIDIA", "https://integrate.api.nvidia.com/v1", "meta/llama-3.1-8b-instruct"),
+            Triple("OpenAI", "https://api.openai.com/v1", "gpt-4o-mini")
+        )
+        val presetBtn = Button(this)
+        presetBtn.isAllCaps = false
+        presetBtn.text = "Load Provider Preset (tap to cycle: Google, OpenRouter, Groq, NVIDIA...)"
+        presetBtn.setOnClickListener {
+            val curUrl = Prefs.text(this, "aiUrl")
+            val nextIdx = (presets.indexOfFirst { it.second == curUrl } + 1) % presets.size
+            val (name, url, model) = presets[nextIdx]
+            fields.firstOrNull { it.first == "aiUrl" }?.second?.setText(url)
+            fields.firstOrNull { it.first == "aiModel" }?.second?.setText(model)
+            saveFields()
+            Toast.makeText(this, "Loaded $name ($model)", Toast.LENGTH_SHORT).show()
+        }
+        col.addView(presetBtn)
+
+        field(col, "Service address (OpenAI-style, must be https):", "aiUrl", "https://generativelanguage.googleapis.com/v1beta/openai")
+        field(col, "Model:", "aiModel", "gemini-1.5-flash")
+        field(col, "Apps NEVER sent to the AI (banks, private chats):", "aiSkip", "com.google.android.apps.messaging")
+        col.addView(button("Test AI connection") {
+            saveFields()
+            Toast.makeText(this, "Testing…", Toast.LENGTH_SHORT).show()
+            Ai.summarize(
+                applicationContext,
+                "Rahul: Are we meeting at 6?\nRahul: Bring the documents\nRahul: Cafe near the station"
+            ) { r -> runOnUiThread { Toast.makeText(this, r, Toast.LENGTH_LONG).show() } }
+        })
+
         col.addView(label("Try it", 16f, true))
         col.addView(button("Send a test card") { sendTest() })
         col.addView(button("Send a test code (OTP) card") { sendTest(otp = "482913") })
@@ -209,9 +268,7 @@ class MainActivity : Activity() {
     }
 
     override fun onPause() {
-        Prefs.setBlockedText(this, blocked.text.toString())
-        for ((k, e) in fields) Prefs.setText(this, k, e.text.toString())
-        Rules.reload(this)
+        saveFields()
         super.onPause()
     }
 

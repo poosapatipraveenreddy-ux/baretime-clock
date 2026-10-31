@@ -16,4 +16,5 @@ class Card(
     var accent: Int = 0         // app color for the glass tint (0 = none)
     var otp: String? = null     // one-time code found in the text, if any
     var vip: Boolean = false    // VIP cards get the extra vibration/sound
+    var chips: List<Chip> = emptyList()   // tappable buttons under the message (link, phone, address, summarize)
 }

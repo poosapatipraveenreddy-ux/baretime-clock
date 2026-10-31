@@ -37,7 +37,7 @@ darker translucent fallback, "send test card" button.
 
 ## Rules
 - No third-party libraries unless truly needed (Room is acceptable for history). No server, no accounts.
-- **Privacy:** never log or send notification text. The manifest has no INTERNET permission on purpose.
+- **Privacy:** never log or automatically send notification text. INTERNET permission is used only for optional AI summaries when the user explicitly taps "Summarize".
 - Never crash the listener (keep the try/catch in `onNotificationPosted`), or Android stops sending notifications.
 - Keep one reused overlay view; do database writes off the main thread.
 - Handle both WhatsApp (`com.whatsapp`) and WhatsApp Business (`com.whatsapp.w4b`).
