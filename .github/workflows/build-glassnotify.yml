@@ -1,0 +1,36 @@
+name: Build GlassNotify APK
+
+# Runs when anything in glassnotify/ changes, or when you press "Run workflow".
+# Download the APK from the finished run's "Artifacts" section.
+on:
+  push:
+    branches: [main]
+    paths: ['glassnotify/**', '.github/workflows/build-glassnotify.yml']
+  workflow_dispatch:
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build APK
+        working-directory: glassnotify
+        run: gradle assembleRelease --no-daemon -PappVersionCode=${{ github.run_number }} -PappVersionName=0.1.${{ github.run_number }}
+
+      - name: Name the APK
+        run: cp glassnotify/app/build/outputs/apk/release/app-release.apk GlassNotify-0.1.${{ github.run_number }}.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GlassNotify-apk
+          path: GlassNotify-*.apk

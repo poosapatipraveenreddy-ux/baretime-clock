@@ -1,0 +1,55 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+def appVersionCode = (project.findProperty('appVersionCode') ?: '1') as int
+def appVersionName = project.findProperty('appVersionName') ?: '0.1.0'
+
+android {
+    namespace 'com.genservices.glassnotify'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.genservices.glassnotify'
+        minSdk 26
+        targetSdk 34
+        versionCode appVersionCode
+        versionName appVersionName
+    }
+
+    // Same key on every build, so a new APK installs over the old one without uninstalling.
+    signingConfigs {
+        release {
+            storeFile file(System.getenv('GN_KEYSTORE') ?: "${rootDir}/keystore/glassnotify.jks")
+            storePassword System.getenv('GN_STORE_PASS') ?: 'baretime'
+            keyAlias System.getenv('GN_KEY_ALIAS') ?: 'baretime'
+            keyPassword System.getenv('GN_KEY_PASS') ?: 'baretime'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+        debug {
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions { jvmTarget = '17' }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
+
+// No libraries on purpose: nothing extra to download, nothing extra to break.
+dependencies {
+}

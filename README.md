@@ -7,6 +7,7 @@ Works offline, follows the phone's own time. **No servers, no backend, no paid s
 baretime/
 ├─ web/        The website + designer (also bundled inside the Android app)
 ├─ android/    The Android app: designer + home-screen widget
+├─ glassnotify/  Separate app: notifications as floating glass cards (see glassnotify/README.md)
 ├─ tools/      Tiny helper used by the publish step
 ├─ docs/       THEME-SPEC.md (design file format), WEBSITE.md
 └─ .github/workflows/   Free automatic builds (APK + website)
