@@ -53,9 +53,47 @@ class NotifService : NotificationListenerService() {
             card.vip = level == Rules.VIP
             card.otp = if (hide) null else Detect.otp(text)
 
-            // ---- chips: link and phone are instant; the address arrives a moment later (below) ----
+            val replyAct = Actions.findReply(n)
+            val markReadAct = Actions.findMarkRead(n)
+            card.replyAction = replyAct
+            card.markReadAction = markReadAct
+
+            // ---- chips: direct reply, quick replies, link and phone are instant; address arrives a moment later ----
             val chipsOn = !hide && Prefs.bool(this, "chips", true)
-            if (chipsOn) card.chips = Detect.chips(text)
+            if (chipsOn) {
+                val actionChips = ArrayList<Chip>()
+                val key = card.key
+
+                // Direct Reply chip (opens inline input on the card)
+                if (replyAct != null && Prefs.bool(this, "replyChips", true)) {
+                    actionChips.add(Chip("💬 Reply", null) {
+                        OverlayManager.openReplyInput(key) { typedText ->
+                            Actions.sendReply(applicationContext, replyAct, typedText)
+                        }
+                    })
+
+                    // One-tap Quick Replies
+                    if (Prefs.quickRepliesOn(this)) {
+                        for (qr in Prefs.quickReplies(this)) {
+                            actionChips.add(Chip(qr, null) {
+                                val ok = Actions.sendReply(applicationContext, replyAct, qr)
+                                OverlayManager.showBody(key, if (ok) "Sent: $qr ✓" else "Couldn't send", 2)
+                            })
+                        }
+                    }
+                }
+
+                // Mark as Read chip
+                if (markReadAct != null && Prefs.bool(this, "markRead", true)) {
+                    actionChips.add(Chip("✓ Read", null) {
+                        Actions.markRead(markReadAct)
+                        OverlayManager.showBody(key, "Marked as read ✓", 2)
+                        cancelNotification(sbn.key)
+                    })
+                }
+
+                card.chips = actionChips + Detect.chips(text)
+            }
 
             // ---- "Summarize" chip: only if AI is on, the chat has several messages, and the app is not excluded ----
             if (!hide && card.otp == null && Ai.enabled(this) && !Ai.skipped(this, pkg)) {

@@ -1,5 +1,6 @@
 package com.genservices.glassnotify
 
+import android.app.Notification
 import android.app.PendingIntent
 import android.graphics.drawable.Drawable
 
@@ -17,4 +18,6 @@ class Card(
     var otp: String? = null     // one-time code found in the text, if any
     var vip: Boolean = false    // VIP cards get the extra vibration/sound
     var chips: List<Chip> = emptyList()   // tappable buttons under the message (link, phone, address, summarize)
+    var replyAction: Notification.Action? = null
+    var markReadAction: PendingIntent? = null
 }

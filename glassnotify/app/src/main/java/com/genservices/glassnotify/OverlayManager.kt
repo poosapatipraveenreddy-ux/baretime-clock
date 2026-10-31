@@ -23,7 +23,10 @@ import android.view.ViewConfiguration
 import android.view.ViewOutlineProvider
 import android.view.WindowManager
 import android.view.animation.OvershootInterpolator
+import android.view.inputmethod.InputMethodManager
+import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -62,8 +65,12 @@ object OverlayManager {
     private lateinit var copyChip: TextView
     private var accent = 0
     private var currentOtp: String? = null
+    private lateinit var chipScroll: HorizontalScrollView
     private lateinit var chipRow: LinearLayout
     private var currentChips: List<Chip> = emptyList()
+    private lateinit var replyRow: LinearLayout
+    private lateinit var replyInput: EditText
+    private var onReplyCallback: ((String) -> Boolean)? = null
 
     fun canDraw(c: Context) = Settings.canDrawOverlays(c)
 
@@ -106,6 +113,7 @@ object OverlayManager {
 
     fun dismiss() {
         handler.removeCallbacks(autoHide)
+        closeReplyInput()
         val r = root ?: return
         if (!attached) return
         r.animate().cancel()
@@ -194,13 +202,66 @@ object OverlayManager {
         col.addView(copyChip, chipLp)
         copyChip.setOnClickListener { copyOtp(it.context) }
 
-        // row for link / phone / address / summarize chips
+        // scrollable row for action chips (reply, quick replies, link, phone, address, summarize)
+        val chipScroll = HorizontalScrollView(c)
+        chipScroll.isHorizontalScrollBarEnabled = false
+        chipScroll.visibility = View.GONE
         chipRow = LinearLayout(c)
         chipRow.orientation = LinearLayout.HORIZONTAL
-        chipRow.visibility = View.GONE
-        val rowLp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-        rowLp.topMargin = dp(c, 6f)
-        col.addView(chipRow, rowLp)
+        chipScroll.addView(chipRow)
+        this.chipScroll = chipScroll
+        val scrollLp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        scrollLp.topMargin = dp(c, 6f)
+        col.addView(chipScroll, scrollLp)
+
+        // inline reply row (for WhatsApp / message replies)
+        replyRow = LinearLayout(c)
+        replyRow.orientation = LinearLayout.HORIZONTAL
+        replyRow.gravity = Gravity.CENTER_VERTICAL
+        replyRow.visibility = View.GONE
+
+        replyInput = EditText(c)
+        replyInput.setTextColor(Color.WHITE)
+        replyInput.setHintTextColor(Color.argb(140, 255, 255, 255))
+        replyInput.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+        replyInput.hint = "Type reply…"
+        replyInput.isSingleLine = true
+        val inBg = GradientDrawable()
+        inBg.cornerRadius = dp(c, 14f).toFloat()
+        inBg.setColor(Color.argb(70, 255, 255, 255))
+        replyInput.background = inBg
+        replyInput.setPadding(dp(c, 10f), dp(c, 6f), dp(c, 10f), dp(c, 6f))
+        val inLp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        replyRow.addView(replyInput, inLp)
+
+        val sendBtn = TextView(c)
+        sendBtn.text = "Send"
+        sendBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+        sendBtn.setTypeface(sendBtn.typeface, Typeface.BOLD)
+        sendBtn.setTextColor(Color.WHITE)
+        sendBtn.setPadding(dp(c, 12f), dp(c, 6f), dp(c, 12f), dp(c, 6f))
+        val sBg = GradientDrawable()
+        sBg.cornerRadius = dp(c, 14f).toFloat()
+        sBg.setColor(Color.argb(120, 255, 255, 255))
+        sendBtn.background = sBg
+        val sendLp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        sendLp.marginStart = dp(c, 6f)
+        replyRow.addView(sendBtn, sendLp)
+
+        val doSend = {
+            val txt = replyInput.text?.toString()?.trim() ?: ""
+            if (txt.isNotEmpty()) {
+                val ok = onReplyCallback?.invoke(txt) ?: false
+                closeReplyInput()
+                showBody(currentKey ?: "", if (ok) "Sent: $txt ✓" else "Couldn't send", 2)
+            }
+        }
+        sendBtn.setOnClickListener { doSend() }
+        replyInput.setOnEditorActionListener { _, _, _ ->
+            doSend()
+            true
+        }
+        col.addView(replyRow, scrollLp)
 
         for (t in arrayOf(appName, title, body)) t.setShadowLayer(3f, 0f, 1f, Color.argb(120, 0, 0, 0))
 
@@ -254,6 +315,7 @@ object OverlayManager {
             copyChip.visibility = View.GONE
         }
         body.maxLines = 2            // a summary may have raised this; reset for every new message
+        closeReplyInput()
         currentChips = card.chips
         renderChips()
     }
@@ -347,7 +409,7 @@ object OverlayManager {
     private fun renderChips() {
         val c = root?.context ?: return
         chipRow.removeAllViews()
-        if (currentChips.isEmpty() || Prefs.pill(c)) { chipRow.visibility = View.GONE; return }
+        if (currentChips.isEmpty() || Prefs.pill(c)) { chipScroll.visibility = View.GONE; return }
         for (chip in currentChips) {
             val v = chipView(c, chip.label)
             v.setOnClickListener { onChip(chip, it.context) }
@@ -355,12 +417,12 @@ object OverlayManager {
             lp.marginEnd = dp(c, 6f)
             chipRow.addView(v, lp)
         }
-        chipRow.visibility = View.VISIBLE
+        chipScroll.visibility = View.VISIBLE
     }
 
     private fun onChip(chip: Chip, c: Context) {
         val act = chip.action
-        if (act != null) { act(); return }            // e.g. Summarize: stay on screen
+        if (act != null) { act(); return }            // e.g. Summarize or Reply: stay on screen
         val i = chip.intent ?: return
         try {
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -373,9 +435,43 @@ object OverlayManager {
 
     /** Adds one more chip (for example the address) to the card, if that chat's card is still on screen. */
     fun addChip(key: String, chip: Chip) {
-        if (!attached || key != currentKey || currentChips.size >= 3) return
+        if (!attached || key != currentKey || currentChips.size >= 8) return
         currentChips = currentChips + chip
         renderChips()
+    }
+
+    fun openReplyInput(key: String, onSend: (String) -> Boolean) {
+        val r = root ?: return
+        val p = lp ?: return
+        if (!attached || key != currentKey) return
+        onReplyCallback = onSend
+        replyInput.setText("")
+        replyRow.visibility = View.VISIBLE
+        chipScroll.visibility = View.GONE
+        handler.removeCallbacks(autoHide)
+        handler.postDelayed(autoHide, 45_000L) // give 45s to type
+
+        // Allow window to receive keyboard focus
+        p.flags = p.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+        try { wm?.updateViewLayout(r, p) } catch (e: Exception) { /* ignore */ }
+
+        replyInput.requestFocus()
+        val imm = r.context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+        imm?.showSoftInput(replyInput, InputMethodManager.SHOW_IMPLICIT)
+    }
+
+    private fun closeReplyInput() {
+        val r = root ?: return
+        val p = lp ?: return
+        if (!::replyRow.isInitialized || replyRow.visibility != View.VISIBLE) return
+        replyRow.visibility = View.GONE
+        if (::chipScroll.isInitialized) {
+            chipScroll.visibility = if (currentChips.isNotEmpty() && !Prefs.pill(r.context)) View.VISIBLE else View.GONE
+        }
+        val imm = r.context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+        imm?.hideSoftInputFromWindow(replyInput.windowToken, 0)
+        p.flags = p.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+        try { wm?.updateViewLayout(r, p) } catch (e: Exception) { /* ignore */ }
     }
 
     /** Replaces the message text (for example with an AI summary) and keeps the card up a bit longer. */

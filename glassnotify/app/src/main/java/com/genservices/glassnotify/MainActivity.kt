@@ -207,7 +207,11 @@ class MainActivity : Activity() {
         col.addView(button("Open history inbox") { startActivity(Intent(this, InboxActivity::class.java)) })
         toggle(col, "Hide the original notification when a card shows", "hideOrig", false)
 
-        col.addView(label("Chips", 16f, true))
+        col.addView(label("Direct Reply & Chips", 16f, true))
+        toggle(col, "WhatsApp & chat reply chips", "replyChips", true)
+        toggle(col, "One-tap quick replies (OK, On my way...)", "quickRepliesOn", true)
+        field(col, "Custom quick replies (comma separated):", "quickReplies", "👍 OK, On my way, Call you later")
+        toggle(col, "Show Mark as Read chip", "markRead", true)
         toggle(col, "Link, phone and address chips", "chips", true)
 
         col.addView(label("AI summary (optional, uses internet)", 16f, true))
@@ -306,9 +310,29 @@ class MainActivity : Activity() {
         Prefs.setBlockedText(this, blocked.text.toString())
         val icon = try { packageManager.getApplicationIcon(packageName) } catch (e: Exception) { null }
         val msg = if (otp != null) "$otp is your verification code. Do not share it." else "Hey! This is how a GlassNotify card looks. Tap me, or swipe me away."
-        val card = Card("test|Aanya", "Messages", "Aanya", msg, null, icon, null)
+        val card = Card("test|Aanya", "WhatsApp", "Aanya", msg, null, icon, null)
         card.accent = Accent.of(packageName, icon)
         card.otp = otp
+        if (otp == null) {
+            val key = card.key
+            card.chips = listOf(
+                Chip("💬 Reply", null) {
+                    OverlayManager.openReplyInput(key) { txt ->
+                        Toast.makeText(this, "Reply sent: $txt", Toast.LENGTH_SHORT).show()
+                        true
+                    }
+                },
+                Chip("👍 OK", null) {
+                    OverlayManager.showBody(key, "Sent: 👍 OK ✓", 2)
+                },
+                Chip("On my way", null) {
+                    OverlayManager.showBody(key, "Sent: On my way ✓", 2)
+                },
+                Chip("✓ Read", null) {
+                    OverlayManager.showBody(key, "Marked as read ✓", 2)
+                }
+            )
+        }
         OverlayManager.show(applicationContext, card)
     }
 }

@@ -34,4 +34,8 @@ object Prefs {
     fun pill(c: Context) = bool(c, "pill", false)            // small card: sender only
     fun hideOriginal(c: Context) = bool(c, "hideOrig", false) // remove the system notification when a card shows
     fun historyOn(c: Context) = bool(c, "history", false)    // off by default: nothing is stored unless the user turns it on
+    fun quickRepliesOn(c: Context) = bool(c, "quickRepliesOn", true)
+    fun quickRepliesText(c: Context) = text(c, "quickReplies").ifBlank { "👍 OK, On my way, Call you later" }
+    fun quickReplies(c: Context): List<String> =
+        quickRepliesText(c).split(',', '\n').map { it.trim() }.filter { it.isNotEmpty() }
 }
