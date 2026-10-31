@@ -1,7 +1,6 @@
-web/site.json
-android/.gradle/
-android/build/
-android/app/build/
-android/local.properties
-*.jks
-*.keystore
+*.apk
+.gradle/
+build/
+local.properties
+.idea/
+*.iml

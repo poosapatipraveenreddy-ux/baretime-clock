@@ -1,16 +1,22 @@
 name: Publish website
+
+# Publishes the web/ folder to GitHub Pages. This is also where the Android app
+# looks for designer updates (designer.json), so no server is needed.
 on:
   push:
     branches: [main]
-    paths: ['web/**', 'tools/make_site_json.py']
+    paths: ['web/**', 'tools/**', '.github/workflows/pages.yml']
   workflow_dispatch:
+
 permissions:
   contents: read
   pages: write
   id-token: write
+
 concurrency:
   group: pages
   cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -19,11 +25,20 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - name: Write site.json (version + file hashes for the app's updater)
-        run: python3 tools/make_site_json.py web
+
+      - name: Write designer.json (version comes from web/sw.js)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG=$(gh api repos/${{ github.repository }}/releases/latest --jq .tag_name 2>/dev/null || true)
+          python3 tools/make-designer-json.py web "${TAG:-none}" \
+            "https://github.com/${{ github.repository }}/releases/latest"
+
       - uses: actions/configure-pages@v5
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web
+
       - id: deployment
         uses: actions/deploy-pages@v4

@@ -2,11 +2,11 @@
  * To ship an update: change VERSION below and redeploy the files.
  * Installed copies notice the change, download the new files in the
  * background and show an "Update now" message. No server code involved. */
-const VERSION = '1.3.0';
+const VERSION = '1.1.0';
 const CORE = 'baretime-core-' + VERSION;
 const RUNTIME = 'baretime-runtime-v1'; // Google Fonts, kept across updates
 const ASSETS = [
-  './', 'index.html', 'styles.css', 'app.js', 'android-bridge.js', 'manifest.webmanifest',
+  './', 'index.html', 'styles.css', 'app.js', 'manifest.webmanifest',
   'icons/favicon.svg', 'icons/icon-192.png', 'icons/icon-512.png',
   'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png'
 ];

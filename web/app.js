@@ -28,6 +28,9 @@ const rgba = (h, a) => { const [r, g, b] = hexToRgb(h); return `rgba(${r},${g},$
 const hashParams = new URLSearchParams(location.hash.slice(1));
 const EMBED = hashParams.get('embed') === '1';
 if (EMBED) document.body.classList.add('embed');
+/* Inside the BareTime Android app the page is hosted in a WebView that exposes `BareTimeAndroid`. */
+const ANDROID = !!window.BareTimeAndroid;
+if (ANDROID) document.body.classList.add('android');
 
 /* ---------- data: fonts, wallpapers, time zones ---------- */
 const FB = { sans: 'system-ui,-apple-system,"Segoe UI",Roboto,sans-serif', serif: 'Georgia,"Times New Roman",serif', mono: 'ui-monospace,SFMono-Regular,Menlo,Consolas,monospace' };
@@ -349,6 +352,13 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) tick
 
 /* ---------- fonts (loaded from Google Fonts, cached by the service worker) ---------- */
 function loadFonts() {
+  if (ANDROID) {
+    const l = el('link', { rel: 'stylesheet', href: 'fonts.css' });
+    l.onload = () => { lastKey = ''; fit(); };
+    document.head.append(l);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { lastKey = ''; fit(); });
+    return;
+  }
   const order = [fontOf(S.font), ...FONTS.filter(f => f.n !== S.font)];
   order.filter(f => f.g).forEach(f => {
     const l = el('link', { rel: 'stylesheet', href: fontHref(f) });
@@ -562,9 +572,10 @@ function presetTile(p) {
 function shareLink() {
   const diff = {};
   for (const k of Object.keys(DEFAULTS)) if (S[k] !== DEFAULTS[k] && !(k === 'wp' && S.wp === 'custom')) diff[k] = S[k];
-  return (window.BARETIME_BASE || location.href.split('#')[0]) + '#t=' + b64enc(diff);
+  return location.href.split('#')[0] + '#t=' + b64enc(diff);
 }
 async function copy(text, okMsg) {
+  if (ANDROID) { try { BareTimeAndroid.copyText(text); return toast(okMsg); } catch { /* fall through */ } }
   try { await navigator.clipboard.writeText(text); toast(okMsg); }
   catch { window.prompt('Copy this:', text); }
 }
@@ -589,6 +600,7 @@ function renderThemes() {
 function exportTheme() {
   const name = ($('#themeName').value || 'my-theme').trim();
   const s = { ...S }; if (s.wp === 'custom') delete s.wp;
+  if (ANDROID) { try { BareTimeAndroid.shareText(JSON.stringify({ app: 'baretime', v: 1, name, settings: s }, null, 2)); } catch { /* ignore */ } return; }
   const blob = new Blob([JSON.stringify({ app: 'baretime', v: 1, name, settings: s }, null, 2)], { type: 'application/json' });
   const a = el('a', { href: URL.createObjectURL(blob), download: `baretime-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'theme'}.json` });
   document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
@@ -612,7 +624,7 @@ addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPromp
 addEventListener('appinstalled', () => { deferredPrompt = null; updateInstallUI(); toast('BareTime is installed.'); });
 async function install() { if (!deferredPrompt) return; deferredPrompt.prompt(); await deferredPrompt.userChoice.catch(() => {}); deferredPrompt = null; updateInstallUI(); }
 
-const canFs = !!(document.documentElement.requestFullscreen);
+const canFs = !ANDROID && !!(document.documentElement.requestFullscreen);
 function toggleFs() {
   if (document.fullscreenElement) document.exitFullscreen();
   else document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => toast('Full screen isn’t available here.'));
@@ -622,6 +634,7 @@ document.addEventListener('fullscreenchange', () => { if (document.fullscreenEle
 let wakeLock = null;
 async function setAwake(on) {
   prefs.awake = on; writeJSON(PKEY, prefs);
+  if (ANDROID) { try { BareTimeAndroid.setKeepScreenOn(!!on); } catch { /* ignore */ } return; }
   try {
     if (on) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); }
     else if (wakeLock) { await wakeLock.release(); wakeLock = null; }
@@ -638,6 +651,7 @@ function swVersion() {
   });
 }
 async function checkUpdates() {
+  if (ANDROID) { try { return toast(BareTimeAndroid.checkUpdates()); } catch { return toast('Couldn’t check for updates.'); } }
   if (!swReg) return toast('Updates work once the app is served over https and installed.');
   try {
     await swReg.update();
@@ -673,26 +687,28 @@ function buildPanel() {
       el('button', { type: 'button', class: 'btn', onclick: () => copy(embedCode(), 'Embed code copied.') }, 'Copy embed code'),
       el('button', { type: 'button', class: 'btn', onclick: exportTheme }, 'Export file'),
       el('button', { type: 'button', class: 'btn', onclick: () => $('#importFile').click() }, 'Import file')),
+    ...(ANDROID ? [] : [el('div', { class: 'btns one' }, el('button', { type: 'button', class: 'btn', onclick: () => { location.href = appLink(); toast('If the BareTime Android app is installed, it opens now.'); } }, 'Open in BareTime Android app'))]),
     el('div', { class: 'note' }, el('b', {}, 'No account needed. '), 'A share link holds the whole design in the address itself, so whoever opens it sees your clock. Your own wallpaper photo isn’t included. Embed code puts the clock on any website; pick “None” as the wallpaper for a see-through background.'));
 
   const ap = pane('app');
   ap.append(el('div', { class: 'h' }, 'Display'));
   if (canFs) ap.append(el('div', { class: 'btns one' }, el('button', { type: 'button', class: 'btn', onclick: toggleFs }, 'Full screen')));
-  if ('wakeLock' in navigator) {
+  if (ANDROID || 'wakeLock' in navigator) {
     const inp = el('input', { type: 'checkbox', 'aria-label': 'Keep screen on' }); inp.checked = !!prefs.awake; inp.onchange = () => setAwake(inp.checked);
     ap.append(el('div', { class: 'row inline' }, el('label', {}, 'Keep screen on'), el('span', { class: 'switch' }, inp, el('i'))));
   }
-  ap.append(el('div', { class: 'h' }, 'Install'),
+  if (!ANDROID) ap.append(el('div', { class: 'h' }, 'Install'),
     el('div', { class: 'btns one' }, el('button', { type: 'button', id: 'appInstall', class: 'btn pri', onclick: install, hidden: '' }, 'Install BareTime')));
-  ap.append(el('div', { class: 'note' }, standalone ? 'BareTime is running as an installed app.' : isiOS ? 'On iPhone or iPad: tap Share, then “Add to Home Screen”.' : 'Use your browser menu → “Install app” or “Add to Home screen” to open BareTime like a normal app, fully offline.'));
+  if (!ANDROID) ap.append(el('div', { class: 'note' }, standalone ? 'BareTime is running as an installed app.' : isiOS ? 'On iPhone or iPad: tap Share, then “Add to Home Screen”.' : 'Use your browser menu → “Install app” or “Add to Home screen” to open BareTime like a normal app, fully offline.'));
   const ver = el('span', {}, '…');
   ap.append(el('div', { class: 'h' }, 'Updates'),
-    el('div', { class: 'note' }, 'BareTime updates itself. When a new version is published you’ll see an “Update now” message — nothing to download. Version: ', ver),
+    el('div', { class: 'note' }, ANDROID ? 'The designer inside this app refreshes itself when you’re online and a newer version is published. It applies the next time you open the app. Version: ' : 'BareTime updates itself. When a new version is published you’ll see an “Update now” message — nothing to download. Version: ', ver),
     el('div', { class: 'btns one' }, el('button', { type: 'button', class: 'btn', onclick: checkUpdates }, 'Check for updates')),
     el('div', { class: 'h' }, 'Reset'),
     el('div', { class: 'btns one' }, el('button', { type: 'button', class: 'btn danger', onclick: () => { if (confirm('Reset the clock to its default look? Saved themes are kept.')) applyObj({}, 'Back to defaults.'); } }, 'Reset design')));
-  swVersion().then(v => { ver.textContent = v || 'dev'; });
+  if (ANDROID) ver.textContent = BareTimeAndroid.designerVersion(); else swVersion().then(v => { ver.textContent = v || 'dev'; });
 
+  if (ANDROID) buildAndroidBar();
   renderThemes();
   showTab(prefs.tab && TAB_LIST.some(t => t[0] === prefs.tab) ? prefs.tab : 'presets');
   syncUI(); updateInstallUI();
@@ -705,6 +721,27 @@ function showTab(id) {
 }
 const panelOpen = () => document.body.classList.contains('panel-open');
 function openPanel(on = !panelOpen()) { document.body.classList.toggle('panel-open', on); if (on) $('#toast').classList.remove('show'); }
+/* Called by the Android app on the Back button: close the panel first. */
+window.__btBack = () => { if (panelOpen()) { openPanel(false); return true; } return false; };
+
+/* ---------- Android app bridge ---------- */
+function appLink() {
+  const diff = {};
+  for (const k of Object.keys(DEFAULTS)) if (S[k] !== DEFAULTS[k] && !(k === 'wp' && S.wp === 'custom')) diff[k] = S[k];
+  return 'baretime://design?t=' + b64enc(diff);
+}
+function applyToWidget() {
+  const s = { ...S }; delete s.wp; delete s.wpDim; delete s.wpBlur;
+  try { toast(BareTimeAndroid.applyToWidget(JSON.stringify(s))); } catch { toast('Couldn’t reach the widget.'); }
+}
+function addWidget() {
+  try { toast(BareTimeAndroid.addWidget()); } catch { toast('Long-press your home screen, open Widgets and pick BareTime.'); }
+}
+function buildAndroidBar() {
+  $('#panel').append(el('div', { id: 'abar' },
+    el('button', { type: 'button', class: 'btn pri', onclick: applyToWidget }, 'Apply to widget'),
+    el('button', { type: 'button', class: 'btn', onclick: addWidget }, 'Add widget')));
+}
 
 /* ---------- wiring ---------- */
 $('#btnPanel').onclick = () => openPanel(true);
@@ -727,7 +764,7 @@ function wake() { document.body.classList.remove('idle'); clearTimeout(idleT); i
 
 /* ---------- service worker with self-update ---------- */
 function registerSW() {
-  if (EMBED || !('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
+  if (EMBED || ANDROID || !('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
   const hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.register('sw.js').then(reg => {
     swReg = reg;
@@ -751,7 +788,10 @@ function registerSW() {
   if (!EMBED) {
     buildPanel(); wake();
     if (prefs.awake) setAwake(true);
-    if (linked) toast('Design loaded from a link.', 'Save it', () => { openPanel(true); showTab('themes'); }, 7000);
+    if (linked) {
+      if (ANDROID) toast('Design loaded from a link.', 'Apply to widget', applyToWidget, 9000);
+      else toast('Design loaded from a link.', 'Save it', () => { openPanel(true); showTab('themes'); }, 7000);
+    }
   }
   loadFonts();
   registerSW();

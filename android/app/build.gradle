@@ -1,0 +1,69 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+// Where the app looks for designer updates. Override with:  gradle assembleRelease -PupdateBaseUrl=https://you.github.io/baretime/
+def updateBaseUrl = project.findProperty('updateBaseUrl') ?: 'https://YOUR-GITHUB-USERNAME.github.io/baretime/'
+def appVersionCode = (project.findProperty('appVersionCode') ?: '1') as int
+def appVersionName = project.findProperty('appVersionName') ?: '1.0.0'
+
+android {
+    namespace 'com.genservices.baretime'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.genservices.baretime'
+        minSdk 26
+        targetSdk 34
+        versionCode appVersionCode
+        versionName appVersionName
+        buildConfigField 'String', 'UPDATE_BASE_URL', "\"${updateBaseUrl}\""
+    }
+
+    buildFeatures { buildConfig true }
+
+    // The web designer lives in ../web and is bundled into the app as-is,
+    // so the app and the website always share one designer.
+    sourceSets {
+        main {
+            assets.srcDirs = ['src/main/assets', '../../web']
+        }
+    }
+
+    // Signing: uses the keystore in android/keystore unless CI provides its own secrets.
+    // Keep the SAME key for every release, otherwise phones refuse to update the app.
+    signingConfigs {
+        release {
+            storeFile file(System.getenv('BT_KEYSTORE') ?: "${rootDir}/keystore/baretime.jks")
+            storePassword System.getenv('BT_STORE_PASS') ?: 'baretime'
+            keyAlias System.getenv('BT_KEY_ALIAS') ?: 'baretime'
+            keyPassword System.getenv('BT_KEY_PASS') ?: 'baretime'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+        debug {
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions { jvmTarget = '17' }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
+
+// No third-party libraries on purpose: fewer things to break, smaller APK.
+dependencies {
+}

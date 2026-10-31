@@ -183,3 +183,9 @@ select option{color:#111}
   body:not(.panel-open) #toast{bottom:calc(22px + env(safe-area-inset-bottom))}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ---------- Android app: sticky action bar ---------- */
+#abar{display:none;flex:none;gap:8px;padding:10px 14px calc(10px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:rgba(10,10,16,.55)}
+body.android #abar{display:flex}
+#abar .btn{flex:1;padding:12px 10px}
+body.android #btnInstall,body.android #btnFs{display:none!important}

@@ -1,0 +1,72 @@
+name: Build Android APK
+
+# Runs on every push that touches the app or designer, and when you press "Run workflow".
+# Push a tag like v1.0.1 to also publish the APK as a downloadable GitHub Release.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+    paths: ['android/**', 'web/**', '.github/workflows/build-apk.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Work out version numbers
+        id: ver
+        run: |
+          # Tag v1.0.3 -> app version 1.0.3. Any other push -> 1.0.<run number>.
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            NAME="${GITHUB_REF_NAME#v}"
+          else
+            NAME="1.0.${{ github.run_number }}"
+          fi
+          IFS=. read -r A B C <<< "$NAME"
+          # Same rule as tools/make-designer-json.py, and it always rises with the version,
+          # so phones accept each new APK as an update.
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "code=$((A*1000000 + B*1000 + C))" >> "$GITHUB_OUTPUT"
+
+      - name: Build release APK
+        working-directory: android
+        env:
+          # Optional: set these repository secrets to sign with your own private key.
+          BT_KEYSTORE: ${{ secrets.BT_KEYSTORE_PATH }}
+          BT_STORE_PASS: ${{ secrets.BT_STORE_PASS }}
+          BT_KEY_ALIAS: ${{ secrets.BT_KEY_ALIAS }}
+          BT_KEY_PASS: ${{ secrets.BT_KEY_PASS }}
+        run: |
+          gradle assembleRelease --no-daemon \
+            -PappVersionCode=${{ steps.ver.outputs.code }} \
+            -PappVersionName=${{ steps.ver.outputs.name }} \
+            -PupdateBaseUrl=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+
+      - name: Name the APK
+        run: cp android/app/build/outputs/apk/release/app-release.apk BareTime-${{ steps.ver.outputs.name }}.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BareTime-apk
+          path: BareTime-*.apk
+
+      - name: Publish release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: BareTime-*.apk
+          generate_release_notes: true
