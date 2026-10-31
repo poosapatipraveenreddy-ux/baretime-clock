@@ -5,6 +5,8 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- Needed on Android 11+ to read the NAME and ICON of the app that sent a notification. Fine for a sideloaded APK; Google Play restricts it. -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <!-- Short buzz for VIP cards. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Deliberately NO internet permission: the app cannot send your notifications anywhere. -->
 
     <application
@@ -22,6 +24,10 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".InboxActivity"
+            android:exported="false" />
 
         <service
             android:name=".NotifService"

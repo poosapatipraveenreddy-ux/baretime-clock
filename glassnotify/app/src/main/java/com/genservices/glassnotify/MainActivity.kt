@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -44,6 +45,58 @@ class MainActivity : Activity() {
         if (bold) t.setTypeface(t.typeface, android.graphics.Typeface.BOLD)
         t.setPadding(0, dp(6f), 0, dp(2f))
         return t
+    }
+
+    private val fields = ArrayList<Pair<String, EditText>>()
+
+    /** On/Off button saved under `key`. */
+    private fun toggle(col: LinearLayout, name: String, key: String, def: Boolean) {
+        val b = Button(this)
+        b.isAllCaps = false
+        val upd = { b.text = name + ": " + (if (Prefs.bool(this, key, def)) "On" else "Off") }
+        b.setOnClickListener {
+            Prefs.setBool(this, key, !Prefs.bool(this, key, def))
+            Rules.reload(this)
+            upd()
+        }
+        upd()
+        col.addView(b)
+    }
+
+    /** Button that cycles through hours, saved under `key`. */
+    private fun cycle(col: LinearLayout, name: String, key: String, options: IntArray, def: Int) {
+        val b = Button(this)
+        b.isAllCaps = false
+        val upd = { b.text = name + ": " + "%02d:00".format(Prefs.num(this, key, def)) }
+        b.setOnClickListener {
+            val i = options.indexOf(Prefs.num(this, key, def))
+            Prefs.setNum(this, key, options[(i + 1) % options.size])
+            Rules.reload(this)
+            upd()
+        }
+        upd()
+        col.addView(b)
+    }
+
+    /** Text box saved under `key` when the screen closes. */
+    private fun field(col: LinearLayout, caption: String, key: String, hint: String) {
+        col.addView(label(caption, 13f))
+        val e = EditText(this)
+        e.setTextColor(Color.WHITE)
+        e.setHintTextColor(Color.argb(120, 255, 255, 255))
+        e.hint = hint
+        e.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+        e.setText(Prefs.text(this, key))
+        col.addView(e)
+        fields.add(key to e)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 77 && resultCode == RESULT_OK) {
+            val u = data?.getParcelableExtra<Uri>(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+            Prefs.setText(this, "vipSoundUri", u?.toString() ?: "")
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -105,8 +158,40 @@ class MainActivity : Activity() {
         blocked.setText(Prefs.blockedText(this))
         col.addView(blocked)
 
+        col.addView(label("Display", 16f, true))
+        toggle(col, "Small pill (sender only)", "pill", false)
+        toggle(col, "Tint card with the app's color", "accent", true)
+
+        col.addView(label("Priority & rules", 16f, true))
+        field(col, "VIP apps (always show, even in quiet hours):", "vip", "com.whatsapp, com.whatsapp.w4b")
+        field(col, "Silent apps (no card):", "silent", "com.instagram.android")
+        field(col, "Hide message text for these apps:", "hideText", "com.google.android.apps.messaging")
+        field(col, "Never show if the message contains (comma separated):", "kwBlock", "offer, sale, discount")
+        field(col, "Always show if the message contains:", "kwAllow", "urgent, emergency")
+
+        col.addView(label("Quiet hours", 16f, true))
+        toggle(col, "Quiet hours", "quiet", false)
+        cycle(col, "Starts at", "quietFrom", intArrayOf(20, 21, 22, 23, 0), 22)
+        cycle(col, "Ends at", "quietTo", intArrayOf(5, 6, 7, 8, 9), 7)
+
+        col.addView(label("VIP alert", 16f, true))
+        toggle(col, "VIP vibration", "vipVibrate", true)
+        toggle(col, "VIP sound", "vipSound", false)
+        col.addView(button("Choose VIP sound") {
+            val i = Intent(RingtoneManager.ACTION_RINGTONE_PICKER)
+            i.putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_NOTIFICATION)
+            i.putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+            startActivityForResult(i, 77)
+        })
+
+        col.addView(label("History", 16f, true))
+        toggle(col, "Save history on this phone", "history", false)
+        col.addView(button("Open history inbox") { startActivity(Intent(this, InboxActivity::class.java)) })
+        toggle(col, "Hide the original notification when a card shows", "hideOrig", false)
+
         col.addView(label("Try it", 16f, true))
         col.addView(button("Send a test card") { sendTest() })
+        col.addView(button("Send a test code (OTP) card") { sendTest(otp = "482913") })
     }
 
     private fun button(text: String, onClick: () -> Unit): Button {
@@ -125,6 +210,8 @@ class MainActivity : Activity() {
 
     override fun onPause() {
         Prefs.setBlockedText(this, blocked.text.toString())
+        for ((k, e) in fields) Prefs.setText(this, k, e.text.toString())
+        Rules.reload(this)
         super.onPause()
     }
 
@@ -154,14 +241,17 @@ class MainActivity : Activity() {
         blurBtn.visibility = View.VISIBLE
     }
 
-    private fun sendTest() {
+    private fun sendTest(otp: String? = null) {
         if (!OverlayManager.canDraw(this)) {
             Toast.makeText(this, "Do step 2 first (display over other apps).", Toast.LENGTH_LONG).show()
             return
         }
         Prefs.setBlockedText(this, blocked.text.toString())
         val icon = try { packageManager.getApplicationIcon(packageName) } catch (e: Exception) { null }
-        val card = Card("test|Aanya", "Messages", "Aanya", "Hey! This is how a GlassNotify card looks. Tap me, or swipe me away.", null, icon, null)
+        val msg = if (otp != null) "$otp is your verification code. Do not share it." else "Hey! This is how a GlassNotify card looks. Tap me, or swipe me away."
+        val card = Card("test|Aanya", "Messages", "Aanya", msg, null, icon, null)
+        card.accent = Accent.of(packageName, icon)
+        card.otp = otp
         OverlayManager.show(applicationContext, card)
     }
 }

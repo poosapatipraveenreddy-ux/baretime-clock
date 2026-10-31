@@ -1,6 +1,8 @@
 package com.genservices.glassnotify
 
 import android.animation.ValueAnimator
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Color
 import android.graphics.Outline
@@ -10,6 +12,7 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.PersistableBundle
 import android.provider.Settings
 import android.util.TypedValue
 import android.view.Gravity
@@ -23,6 +26,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import kotlin.math.abs
 import kotlin.math.hypot
 
@@ -54,6 +58,9 @@ object OverlayManager {
     private var baseY = 0
     private var topEdge = true
     private var glassBlur = false
+    private lateinit var copyChip: TextView
+    private var accent = 0
+    private var currentOtp: String? = null
 
     fun canDraw(c: Context) = Settings.canDrawOverlays(c)
 
@@ -68,6 +75,7 @@ object OverlayManager {
         topEdge = Prefs.top(c)
         glassBlur = Build.VERSION.SDK_INT >= 31 && Prefs.blur(c) && wm!!.isCrossWindowBlurEnabled
         if (root == null) build(c)
+        accent = if (Prefs.accentOn(c)) card.accent else 0
         applyLook(c)
 
         val sameChat = attached && card.key == currentKey
@@ -111,7 +119,8 @@ object OverlayManager {
 
     private fun scheduleHide(c: Context) {
         handler.removeCallbacks(autoHide)
-        handler.postDelayed(autoHide, Prefs.seconds(c) * 1000L)
+        val secs = if (currentOtp != null) maxOf(Prefs.seconds(c), 15) else Prefs.seconds(c)
+        handler.postDelayed(autoHide, secs * 1000L)
     }
 
     // ------------------------------------------------------------------ view
@@ -166,22 +175,52 @@ object OverlayManager {
         body.ellipsize = android.text.TextUtils.TruncateAt.END
         col.addView(body)
 
+        // "Copy code" chip, only visible when the message has a one-time code
+        copyChip = TextView(c)
+        copyChip.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+        copyChip.setTypeface(copyChip.typeface, Typeface.BOLD)
+        copyChip.setTextColor(Color.WHITE)
+        copyChip.setPadding(dp(c, 12f), dp(c, 6f), dp(c, 12f), dp(c, 6f))
+        val chipBg = GradientDrawable()
+        chipBg.cornerRadius = dp(c, 14f).toFloat()
+        chipBg.setColor(Color.argb(90, 255, 255, 255))
+        copyChip.background = chipBg
+        copyChip.visibility = View.GONE
+        val chipLp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        chipLp.topMargin = dp(c, 6f)
+        col.addView(copyChip, chipLp)
+        copyChip.setOnClickListener { copyOtp(it.context) }
+
         for (t in arrayOf(appName, title, body)) t.setShadowLayer(3f, 0f, 1f, Color.argb(120, 0, 0, 0))
 
         r.setOnTouchListener(touch)
         root = r
     }
 
-    /** Glass when the phone can blur what is behind the card; otherwise a darker see-through card that stays readable. */
+    private fun withAlpha(color: Int, a: Int) = (a shl 24) or (color and 0x00FFFFFF)
+
+    private fun mix(a: Int, b: Int, f: Float): Int {   // f = how much of b
+        val i = 1f - f
+        return Color.rgb(
+            (Color.red(a) * i + Color.red(b) * f).toInt(),
+            (Color.green(a) * i + Color.green(b) * f).toInt(),
+            (Color.blue(a) * i + Color.blue(b) * f).toInt()
+        )
+    }
+
+    /** Glass when the phone can blur what is behind the card; otherwise a darker see-through card that stays readable.
+     *  If an app color is available the glass is tinted with it. */
     private fun applyLook(c: Context) {
         val bg = GradientDrawable()
         bg.cornerRadius = dp(c, if (glassBlur) 18f else 22f).toFloat()
+        val tint = accent != 0
         if (glassBlur) {
-            bg.setColor(Color.argb(60, 255, 255, 255))
-            bg.setStroke(dp(c, 1f), Color.argb(110, 255, 255, 255))
+            bg.setColor(if (tint) withAlpha(accent, 80) else Color.argb(60, 255, 255, 255))
+            bg.setStroke(dp(c, 1f), if (tint) withAlpha(accent, 160) else Color.argb(110, 255, 255, 255))
         } else {
-            bg.setColor(Color.argb(215, 28, 30, 44))
-            bg.setStroke(dp(c, 1f), Color.argb(60, 255, 255, 255))
+            val base = Color.rgb(28, 30, 44)
+            bg.setColor(withAlpha(if (tint) mix(base, accent, 0.22f) else base, 215))
+            bg.setStroke(dp(c, 1f), if (tint) withAlpha(accent, 130) else Color.argb(60, 255, 255, 255))
         }
         root?.background = bg
     }
@@ -194,13 +233,21 @@ object OverlayManager {
         title.text = card.title
         title.visibility = if (card.title.isEmpty()) View.GONE else View.VISIBLE
         body.text = card.text
-        body.visibility = if (card.text.isEmpty()) View.GONE else View.VISIBLE
+        // pill mode shows only the sender, no message text
+        body.visibility = if (Prefs.pill(root!!.context) || card.text.isEmpty()) View.GONE else View.VISIBLE
+        currentOtp = card.otp
+        if (card.otp != null) {
+            copyChip.text = "Copy code  " + card.otp
+            copyChip.visibility = View.VISIBLE
+        } else {
+            copyChip.visibility = View.GONE
+        }
     }
 
     private fun buildParams(c: Context): WindowManager.LayoutParams {
         val screenW = c.resources.displayMetrics.widthPixels
         val p = WindowManager.LayoutParams(
-            screenW - dp(c, 24f),
+            if (Prefs.pill(c)) WindowManager.LayoutParams.WRAP_CONTENT else screenW - dp(c, 24f),
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
@@ -266,6 +313,16 @@ object OverlayManager {
             }
             return false
         }
+    }
+
+    private fun copyOtp(c: Context) {
+        val code = currentOtp ?: return
+        val clip = ClipData.newPlainText("code", code)
+        // asks Android 13+ not to show the code in the clipboard preview
+        clip.description.extras = PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE", true) }
+        (c.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(clip)
+        Toast.makeText(c, "Code copied", Toast.LENGTH_SHORT).show()
+        dismiss()
     }
 
     private fun openApp() {

@@ -20,4 +20,18 @@ object Prefs {
     fun setBlockedText(c: Context, v: String) = p(c).edit().putString("blocked", v).apply()
     fun blocked(c: Context): Set<String> =
         blockedText(c).split(',', '\n', ' ').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+
+    // ---- generic helpers (used by Rules, Sound, History and the settings screen) ----
+    fun bool(c: Context, key: String, def: Boolean) = p(c).getBoolean(key, def)
+    fun setBool(c: Context, key: String, v: Boolean) = p(c).edit().putBoolean(key, v).apply()
+    fun num(c: Context, key: String, def: Int) = p(c).getInt(key, def)
+    fun setNum(c: Context, key: String, v: Int) = p(c).edit().putInt(key, v).apply()
+    fun text(c: Context, key: String) = p(c).getString(key, "") ?: ""
+    fun setText(c: Context, key: String, v: String) = p(c).edit().putString(key, v).apply()
+
+    // ---- named shortcuts ----
+    fun accentOn(c: Context) = bool(c, "accent", true)       // tint the card with the app's color
+    fun pill(c: Context) = bool(c, "pill", false)            // small card: sender only
+    fun hideOriginal(c: Context) = bool(c, "hideOrig", false) // remove the system notification when a card shows
+    fun historyOn(c: Context) = bool(c, "history", false)    // off by default: nothing is stored unless the user turns it on
 }
